@@ -1,0 +1,48 @@
+name: Daily PM Brief
+
+on:
+  schedule:
+    - cron: "30 23 * * *"
+  workflow_dispatch:
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    env:
+      TZ: Asia/Shanghai
+      LARK_DOC_URL: https://my.feishu.cn/wiki/S466w3hCViJ4qNk6iiicURt8nsb
+      LARK_APP_ID: ${{ secrets.LARK_APP_ID }}
+      LARK_APP_SECRET: ${{ secrets.LARK_APP_SECRET }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Restore runtime cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            data/archive.jsonl
+            data/feed_cache.json
+            data/source_health.json
+          key: daily-pm-brief-state-${{ github.run_id }}
+          restore-keys: |
+            daily-pm-brief-state-
+
+      - name: Install Lark CLI
+        run: npm install -g @larksuite/cli
+
+      - name: Ensure runtime folders
+        run: mkdir -p data reports
+
+      - name: Generate and publish brief
+        run: python3 scripts/run_daily_brief_cloud.py
