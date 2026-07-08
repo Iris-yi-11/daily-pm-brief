@@ -2,8 +2,15 @@ name: Daily PM Brief
 
 on:
   schedule:
-    - cron: "30 23 * * *"
+    - cron: "7 23 * * *"
+    - cron: "37 23 * * *"
+    - cron: "7 0 * * *"
+    - cron: "37 0 * * *"
   workflow_dispatch:
+
+concurrency:
+  group: daily-pm-brief
+  cancel-in-progress: false
 
 jobs:
   brief:
@@ -46,3 +53,15 @@ jobs:
 
       - name: Generate and publish brief
         run: python3 scripts/run_daily_brief_cloud.py
+
+      - name: Upload run artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: daily-pm-brief-${{ github.run_id }}
+          if-no-files-found: warn
+          path: |
+            reports/
+            data/source_health.json
+            data/feed_cache.json
+            data/archive.jsonl
