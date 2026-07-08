@@ -31,7 +31,7 @@
 .github/workflows/daily-pm-brief.yml
 ```
 
-它会在每天 **Asia/Shanghai 07:30** 定时运行，并把最新简报覆盖写回飞书文档：
+它会在每天 **Asia/Shanghai 08:40 / 08:55 / 09:10** 触发兜底调度，并把最新简报追加写回飞书文档：
 
 ```text
 https://my.feishu.cn/wiki/S466w3hCViJ4qNk6iiicURt8nsb
@@ -119,10 +119,11 @@ python3 scripts/run_daily_brief_cloud.py
 这个脚本会顺序执行：
 
 1. `validate_sources.py`
-2. `pm_brief.cli`
-3. 用 `lark-cli` 将最终 Markdown 覆盖写回飞书 wiki
+2. 先检查飞书文档里是否已经存在“当天日期”的标题；如果已经发布，直接退出，不再重复生成
+3. `pm_brief.cli`
+4. 用 `lark-cli` 将最终 Markdown 追加写回飞书 wiki
 
-如果当天网络异常、候选不足或回退内容太弱，脚本不会硬发低质量新稿，而是保留上一份高质量简报并把保留版本重新推送到飞书。
+如果当天网络异常、候选不足或回退内容太弱，脚本不会硬发低质量新稿，而是保留上一份高质量简报并把保留版本以“当天说明”的形式追加到飞书，不会覆盖掉历史简报。
 
 ## 运行健康状态
 
@@ -185,6 +186,7 @@ python3 -m pm_brief.cli --candidates-file data/candidates/YYYY-MM-DD.json
 
 - 网络正常时，优先输出当天的新鲜高质量内容。
 - 网络异常时，不会把 `source_health.json` 错误污染，也不会硬生成一份低质量日报。
+- GitHub Actions 即使触发多次，也只会在“当天还没发布”时真正生成一次，因此不会按触发次数重复消耗 token。
 
 ## Token 成本
 

@@ -5,13 +5,20 @@ import subprocess
 import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 from zoneinfo import ZoneInfo
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from pm_brief.publish import configure_lark_cli, prepare_publish_file, publish_markdown_file
+from pm_brief.publish import (
+    configure_lark_cli,
+    document_has_brief_for_date,
+    fetch_document_markdown,
+    prepare_publish_file,
+    publish_markdown_file,
+)
 
 
 def main() -> int:
@@ -25,7 +32,22 @@ def main() -> int:
     parser.add_argument("--skip-publish", action="store_true")
     args = parser.parse_args()
 
-    brief_date = datetime.now(ZoneInfo(args.timezone)).date().isoformat()
+    brief_day = datetime.now(ZoneInfo(args.timezone)).date()
+    brief_date = brief_day.isoformat()
+    doc_url = args.doc_url
+    app_id = os.getenv("LARK_APP_ID", "")
+    app_secret = os.getenv("LARK_APP_SECRET", "")
+
+    if not args.skip_publish:
+        if not doc_url:
+            raise SystemExit("LARK_DOC_URL is required unless --skip-publish is used.")
+        if not app_id or not app_secret:
+            raise SystemExit("LARK_APP_ID and LARK_APP_SECRET are required for Feishu publishing.")
+        configure_lark_cli(app_id, app_secret)
+        existing_content = _fetch_existing_content(doc_url, brief_day)
+        if existing_content is not None and document_has_brief_for_date(existing_content, brief_day):
+            print(f"Brief already published for {brief_date}; skipping generation.")
+            return 0
 
     if not args.skip_validate:
         subprocess.run(
@@ -55,17 +77,9 @@ def main() -> int:
     )
     report_path = _extract_report_path(generated.stdout)
     status = _read_status(PROJECT_ROOT / args.output_dir / "status.md")
-    publish_path = prepare_publish_file(report_path, status, datetime.fromisoformat(brief_date).date())
+    publish_path = prepare_publish_file(report_path, status, brief_day)
 
     if not args.skip_publish:
-        doc_url = args.doc_url
-        if not doc_url:
-            raise SystemExit("LARK_DOC_URL is required unless --skip-publish is used.")
-        app_id = os.getenv("LARK_APP_ID", "")
-        app_secret = os.getenv("LARK_APP_SECRET", "")
-        if not app_id or not app_secret:
-            raise SystemExit("LARK_APP_ID and LARK_APP_SECRET are required for Feishu publishing.")
-        configure_lark_cli(app_id, app_secret)
         publish_markdown_file(doc_url, publish_path)
 
     print(report_path)
@@ -89,6 +103,17 @@ def _read_status(path: Path) -> dict[str, str]:
             key, value = line[2:].split(":", 1)
             status[key.strip()] = value.strip()
     return status
+
+
+def _fetch_existing_content(doc_url: str, brief_day) -> Optional[str]:
+    try:
+        return fetch_document_markdown(doc_url)
+    except subprocess.CalledProcessError as exc:
+        print(
+            f"Warning: failed to fetch existing Feishu content before publishing {brief_day.isoformat()}: {exc}",
+            file=sys.stderr,
+        )
+        return None
 
 
 if __name__ == "__main__":

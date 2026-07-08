@@ -5,7 +5,13 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
 
-from pm_brief.publish import configure_lark_cli, prepare_publish_file, publish_markdown_file
+from pm_brief.publish import (
+    configure_lark_cli,
+    document_has_brief_for_date,
+    fetch_document_markdown,
+    prepare_publish_file,
+    publish_markdown_file,
+)
 
 
 class PublishTests(unittest.TestCase):
@@ -29,7 +35,21 @@ class PublishTests(unittest.TestCase):
 
         args = run.call_args.args[0]
         self.assertEqual(args[:6], ["lark-cli", "docs", "+update", "--api-version", "v2", "--as"])
+        self.assertIn("append", args)
         self.assertIn(f"@{target.relative_to(Path.cwd()).as_posix()}", args)
+
+    def test_fetch_document_markdown_reads_json_payload(self):
+        payload = '{"data":{"document":{"content":"# Daily PM Growth Brief — 2026-07-08"}}}'
+        with patch("pm_brief.publish.subprocess.run") as run:
+            run.return_value = subprocess.CompletedProcess(args=[], returncode=0, stdout=payload)
+            content = fetch_document_markdown("https://example.com/wiki/abc")
+
+        self.assertEqual(content, "# Daily PM Growth Brief — 2026-07-08")
+
+    def test_document_has_brief_for_date_matches_heading(self):
+        content = "# Daily PM Growth Brief — 2026-07-08\n\nBody"
+        self.assertTrue(document_has_brief_for_date(content, date(2026, 7, 8)))
+        self.assertFalse(document_has_brief_for_date(content, date(2026, 7, 7)))
 
     def test_prepare_publish_file_wraps_preserved_report(self):
         with TemporaryDirectory() as temp_dir:
@@ -55,7 +75,8 @@ class PublishTests(unittest.TestCase):
 
             result = prepare_publish_file(report_path, {"Preserved existing report": "False"}, date(2026, 7, 7))
 
-            self.assertEqual(result, report_path)
+            self.assertEqual(result.name, "_publish_today.md")
+            self.assertEqual(result.read_text(encoding="utf-8"), "\n\n---\n\n# Daily PM Growth Brief — 2026-07-07\n")
 
 
 if __name__ == "__main__":
