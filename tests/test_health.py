@@ -1,4 +1,5 @@
 import unittest
+from datetime import datetime, timedelta, timezone
 
 from pm_brief.health import filter_sources_by_health, merge_source_health
 from pm_brief.models import Source
@@ -92,6 +93,7 @@ class HealthTests(unittest.TestCase):
         self.assertEqual([source.name for source in filtered], ["Critical"])
 
     def test_filter_sources_by_health_keeps_recently_successful_unstable_sources(self):
+        recent_success = (datetime.now(timezone.utc) - timedelta(days=1)).isoformat()
         sources = [
             Source("Recovering", "https://example.com/recovering.xml", "AI Frontier", 5, "en"),
         ]
@@ -100,7 +102,7 @@ class HealthTests(unittest.TestCase):
                 "name": "Recovering",
                 "url": "https://example.com/recovering.xml",
                 "status": "unstable",
-                "last_success_at": "2026-07-05T08:12:00+00:00",
+                "last_success_at": recent_success,
             }
         }
 
