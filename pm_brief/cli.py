@@ -20,6 +20,7 @@ def main() -> int:
         help="Exit non-zero when the run preserved an old report or produced too little fresh content.",
     )
     parser.add_argument("--min-candidates", type=int, default=20, help="Minimum fresh candidates for a healthy run.")
+    parser.add_argument("--min-fresh-articles", type=int, default=20, help="Minimum live or researched articles for a healthy run.")
     parser.add_argument("--min-must-reads", type=int, default=2, help="Minimum Must Read items for a healthy run.")
     parser.add_argument("--min-ai-watch", type=int, default=2, help="Minimum AI Product Watch items for a healthy run.")
     parser.add_argument("--min-marketplace", type=int, default=2, help="Minimum Marketplace items for a healthy run.")
@@ -38,19 +39,24 @@ def main() -> int:
         status = _read_status(Path(args.output_dir) / "status.md")
         preserved = status.get("Preserved existing report", "").lower() == "true"
         candidate_count = int(status.get("Candidate count", "0") or 0)
+        candidate_article_count = int(status.get("Candidate article count", "0") or 0)
+        live_article_count = int(status.get("Live article count", "0") or 0)
+        fresh_article_count = candidate_article_count + live_article_count
         must_read_count = int(status.get("Must Read count", "0") or 0)
         ai_watch_count = int(status.get("AI Product Watch count", "0") or 0)
         marketplace_count = int(status.get("Marketplace count", "0") or 0)
         if (
             preserved
             or candidate_count < args.min_candidates
+            or fresh_article_count < args.min_fresh_articles
             or must_read_count < args.min_must_reads
             or ai_watch_count < args.min_ai_watch
             or marketplace_count < args.min_marketplace
         ):
             print(
                 "Insufficient fresh brief: "
-                f"preserved={preserved}, candidates={candidate_count}, must_reads={must_read_count}, "
+                f"preserved={preserved}, candidates={candidate_count}, fresh_articles={fresh_article_count}, "
+                f"must_reads={must_read_count}, "
                 f"ai_watch={ai_watch_count}, marketplace={marketplace_count}"
             )
             return 2

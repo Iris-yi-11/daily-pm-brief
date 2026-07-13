@@ -37,6 +37,7 @@ def main() -> int:
     doc_url = args.doc_url
     app_id = os.getenv("LARK_APP_ID", "")
     app_secret = os.getenv("LARK_APP_SECRET", "")
+    existing_content: Optional[str] = None
 
     if not args.skip_publish:
         if not doc_url:
@@ -56,20 +57,23 @@ def main() -> int:
             check=False,
         )
 
+    generate_command = [
+        sys.executable,
+        "-m",
+        "pm_brief.cli",
+        "--config",
+        args.config,
+        "--output-dir",
+        args.output_dir,
+        "--archive",
+        args.archive,
+        "--date",
+        brief_date,
+    ]
+    if not args.skip_publish:
+        generate_command.extend(["--fail-on-insufficient", "--min-fresh-articles", "20"])
     generated = subprocess.run(
-        [
-            sys.executable,
-            "-m",
-            "pm_brief.cli",
-            "--config",
-            args.config,
-            "--output-dir",
-            args.output_dir,
-            "--archive",
-            args.archive,
-            "--date",
-            brief_date,
-        ],
+        generate_command,
         cwd=PROJECT_ROOT,
         check=True,
         capture_output=True,
@@ -80,7 +84,7 @@ def main() -> int:
     publish_path = prepare_publish_file(report_path, status, brief_day)
 
     if not args.skip_publish:
-        publish_markdown_file(doc_url, publish_path)
+        publish_markdown_file(doc_url, publish_path, existing_content=existing_content)
 
     print(report_path)
     return 0

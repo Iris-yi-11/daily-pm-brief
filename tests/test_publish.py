@@ -9,6 +9,7 @@ from pm_brief.publish import (
     configure_lark_cli,
     document_has_brief_for_date,
     fetch_document_markdown,
+    prepare_prepend_file,
     prepare_publish_file,
     publish_markdown_file,
 )
@@ -25,18 +26,43 @@ class PublishTests(unittest.TestCase):
             check=True,
         )
 
-    def test_publish_markdown_file_uses_relative_content_path(self):
+    def test_publish_markdown_file_prepends_by_default(self):
+        with TemporaryDirectory(dir=Path.cwd()) as temp_dir:
+            root = Path(temp_dir)
+            target = root / "report.md"
+            target.write_text("# Daily PM Growth Brief — 2026-07-09", encoding="utf-8")
+            with patch("pm_brief.publish.subprocess.run") as run:
+                publish_markdown_file("https://example.com/wiki/abc", target, existing_content="# Daily PM Growth Brief — 2026-07-08")
+
+        args = run.call_args.args[0]
+        self.assertEqual(args[:6], ["lark-cli", "docs", "+update", "--api-version", "v2", "--as"])
+        self.assertIn("overwrite", args)
+        self.assertIn(f"@{(target.parent / '_publish_prepend.md').relative_to(Path.cwd()).as_posix()}", args)
+
+    def test_publish_markdown_file_can_append_when_requested(self):
         with TemporaryDirectory(dir=Path.cwd()) as temp_dir:
             root = Path(temp_dir)
             target = root / "report.md"
             target.write_text("# title", encoding="utf-8")
             with patch("pm_brief.publish.subprocess.run") as run:
-                publish_markdown_file("https://example.com/wiki/abc", target)
+                publish_markdown_file("https://example.com/wiki/abc", target, placement="append")
 
         args = run.call_args.args[0]
-        self.assertEqual(args[:6], ["lark-cli", "docs", "+update", "--api-version", "v2", "--as"])
         self.assertIn("append", args)
         self.assertIn(f"@{target.relative_to(Path.cwd()).as_posix()}", args)
+
+    def test_prepare_prepend_file_places_new_brief_before_existing_content(self):
+        with TemporaryDirectory(dir=Path.cwd()) as temp_dir:
+            root = Path(temp_dir)
+            target = root / "report.md"
+            target.write_text("\n\n---\n\n# Daily PM Growth Brief — 2026-07-09\n\nNew", encoding="utf-8")
+
+            result = prepare_prepend_file(target, "# Daily PM Growth Brief — 2026-07-08\n\nOld")
+
+            content = result.read_text(encoding="utf-8")
+            self.assertTrue(content.startswith("# Daily PM Growth Brief — 2026-07-09"))
+            self.assertLess(content.index("2026-07-09"), content.index("2026-07-08"))
+            self.assertIn("---", content)
 
     def test_fetch_document_markdown_reads_json_payload(self):
         payload = '{"data":{"document":{"content":"# Daily PM Growth Brief — 2026-07-08"}}}'

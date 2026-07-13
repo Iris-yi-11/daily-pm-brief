@@ -3,7 +3,7 @@ import re
 import subprocess
 from datetime import date
 from pathlib import Path
-from typing import Dict
+from typing import Dict, Optional
 
 
 def configure_lark_cli(app_id: str, app_secret: str, brand: str = "feishu") -> None:
@@ -44,8 +44,22 @@ def document_has_brief_for_date(content: str, brief_date: date) -> bool:
     return re.search(pattern, content) is not None
 
 
-def publish_markdown_file(doc_url: str, markdown_path: Path, as_identity: str = "bot", command: str = "append") -> None:
-    relative_path = markdown_path.relative_to(Path.cwd())
+def publish_markdown_file(
+    doc_url: str,
+    markdown_path: Path,
+    as_identity: str = "bot",
+    placement: str = "prepend",
+    existing_content: Optional[str] = None,
+) -> None:
+    if placement not in {"prepend", "append"}:
+        raise ValueError("placement must be 'prepend' or 'append'")
+    command = "append"
+    content_path = markdown_path
+    if placement == "prepend":
+        command = "overwrite"
+        existing = existing_content if existing_content is not None else fetch_document_markdown(doc_url, as_identity=as_identity)
+        content_path = prepare_prepend_file(markdown_path, existing)
+    relative_path = content_path.relative_to(Path.cwd())
     subprocess.run(
         [
             "lark-cli",
@@ -66,6 +80,28 @@ def publish_markdown_file(doc_url: str, markdown_path: Path, as_identity: str = 
         ],
         check=True,
     )
+
+
+def prepare_prepend_file(markdown_path: Path, existing_content: str) -> Path:
+    target = markdown_path.parent / "_publish_prepend.md"
+    new_content = _strip_leading_separator(markdown_path.read_text(encoding="utf-8").strip())
+    existing = (existing_content or "").strip()
+    parts = [new_content]
+    if existing:
+        parts.extend(["---", existing])
+    target.write_text("\n\n".join(parts) + "\n", encoding="utf-8")
+    return target
+
+
+def _strip_leading_separator(content: str) -> str:
+    lines = content.splitlines()
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if lines and lines[0].strip() == "---":
+        lines.pop(0)
+        while lines and not lines[0].strip():
+            lines.pop(0)
+    return "\n".join(lines).strip()
 
 
 def prepare_publish_file(report_path: Path, status: Dict[str, str], brief_date: date) -> Path:
