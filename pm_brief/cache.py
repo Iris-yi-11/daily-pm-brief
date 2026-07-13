@@ -1,7 +1,7 @@
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Dict, Iterable, List
+from typing import Dict, Iterable, List, Optional
 
 from pm_brief.health import source_key
 from pm_brief.models import Article, Source
@@ -59,8 +59,9 @@ def cached_articles_for_sources(
     cache: FeedCache,
     sources: Iterable[Source],
     max_age_days: int = 7,
+    reference_time: Optional[datetime] = None,
 ) -> List[Article]:
-    now = datetime.now(timezone.utc)
+    now = reference_time or datetime.now(timezone.utc)
     articles: List[Article] = []
     for source in sources:
         entry = cache.get(source_key(source.name, source.url))

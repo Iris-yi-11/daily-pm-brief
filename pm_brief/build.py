@@ -85,13 +85,27 @@ def generate_brief(
         )
         write_feed_cache(feed_cache_path, feed_cache)
     candidate_articles = list(candidate_articles)
-    fresh_articles = _filter_recent_real_articles([*candidate_articles, *live_articles], days=int(config.get("lookback_days", 3)))
+    reference_time = datetime.combine(brief_date, datetime.max.time(), tzinfo=timezone.utc)
+    fresh_articles = _filter_recent_real_articles(
+        [*candidate_articles, *live_articles],
+        days=int(config.get("lookback_days", 3)),
+        reference_time=reference_time,
+    )
     fallback_mode = ""
     scored: List[ScoredArticle] = []
     if not fresh_articles:
         cached_articles = _filter_recent_real_articles(
-            [*candidate_articles, *cached_articles_for_sources(feed_cache, sources, max_age_days=int(config.get("feed_cache_retention_days", 7)))],
+            [
+                *candidate_articles,
+                *cached_articles_for_sources(
+                    feed_cache,
+                    sources,
+                    max_age_days=int(config.get("feed_cache_retention_days", 7)),
+                    reference_time=reference_time,
+                ),
+            ],
             days=max(int(config.get("lookback_days", 3)), int(config.get("feed_cache_retention_days", 7))),
+            reference_time=reference_time,
         )
         if cached_articles:
             fresh_articles = cached_articles
@@ -403,8 +417,8 @@ def _best_existing_report(output_dir: Path, brief_date: date) -> Optional[Path]:
     return None
 
 
-def _filter_recent_real_articles(articles: Iterable[Article], days: int) -> List[Article]:
-    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+def _filter_recent_real_articles(articles: Iterable[Article], days: int, reference_time: Optional[datetime] = None) -> List[Article]:
+    cutoff = (reference_time or datetime.now(timezone.utc)) - timedelta(days=days)
     filtered = []
     for article in articles:
         if article.title.startswith("[Fetch warning]"):
